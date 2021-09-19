@@ -2940,6 +2940,9 @@ class GpuBox(Box):
 		card, name = gpu.gpu[0], gpu.name
 		stat = gpu.stats[gpu.uuid]
 		stat_nums = gpu.stat_nums[gpu.uuid]
+		errlog.debug(f'GPU card: {card} name: {name}')
+		errlog.debug(f'stat: {stat}')
+		errlog.debug(f'stat_nums {stat_nums}')
 		out: str = ""
 		out_misc: str = ""
 		x, y, w, h = cls.x + 1, cls.y + 1, cls.width - 2, cls.height - 2
@@ -2953,7 +2956,7 @@ class GpuBox(Box):
 
 			Meters.gpu["load"]["gpu"] = Meter(int(stat["load"]["gpu"]), (w // 2) - 4, "cpu")
 			Meters.gpu["load"]["mem"] = Meter(int(stat["load"]["mem"]), (w // 2) - 4, "cpu")
-			# Meters.gpu["vitals"]["vram"] = Meter(int(stat["vitals"]["vram"]), (w // 2) - 4, "cpu")
+			Meters.gpu["vitals"]["vram"] = Meter(int(stat["vitals"]["vram"]), (w // 2) - 4, "cpu")
 
 			Draw.buffer("gpu_misc", out_misc, only_save=True)
 
@@ -2962,7 +2965,7 @@ class GpuBox(Box):
 
 		fixedEnding = lambda s, n : f'{s}{(n-(int(log10(s))+1)) * " "}{Mv.r(n-(int(log10(s))+1))}'
 		clock = lambda s: fixedEnding(s, 4) + 'Mhz'
-		# voltage = lambda s: fixedEnding(s, 4) + 'mV'
+		voltage = lambda s: fixedEnding(s, 4) + 'mV'
 		watts = lambda s: f'{s}{(6-(len(str(s))+1)) * " "}{Mv.r(6-(len(str(s))+1))}W'
 
 		# load percent
@@ -2971,13 +2974,19 @@ class GpuBox(Box):
 
 		# vram
 		if gpu.gpu_brand == "AMD":
+			# errlog.debug('Meters.gpu: ')
+			# errlog.debug(Meters.gpu)
+			# errlog.debug('stat: ')
+			# errlog.debug(stat)
 			out += f'{Mv.to(y+2, Term.width - round(w / 2) - 2)}{THEME.graph_text("VRAM ")}{Meters.gpu["vitals"]["vram"](None if cls.resized else stat["vitals"]["vram"])}'
 		# TODO NVIDIA?
 
 		# clocks
+		# errlog.debug('stat_nums')
+		# errlog.debug(stat_nums)
 		for f_i in range(len(stat_nums["freqs"])):
 			(f, name) = stat_nums["freqs"][f_i]
-			out += f'{Mv.to(y+f_i, x)}{THEME.graph_text(name+": ")}{clock(stat["freqs"][f"freq{f_i}"][0])}'
+			out += f'{Mv.to(y+f_i, x)}{THEME.graph_text(name+": ")}{clock(int(stat["freqs"][f"freq{f_i+1}"][0]))}'
 
 		# voltage
 		if gpu.gpu_brand == "AMD":
@@ -4135,7 +4144,9 @@ class GpuCollector(Collector):
 		return val
 
 	@classmethod
-	def _get_hwmon(cls, name): return cls.dir + name + cls.hwmon
+	def _get_hwmon(cls, name):
+		import glob
+		return glob.glob(cls.dir + name + cls.hwmon)[0]
 
 	@classmethod
 	def _get_device(cls, name): return cls.dir + name + "/device/"
@@ -4177,6 +4188,9 @@ class GpuCollector(Collector):
 	def _get_stat_nums(cls, card):
 		stat_keys = ["fans", "freqs", "temps", "power", "volts"]
 		sys_keys = ["fan", "freq", "temp", "power", "in"]
+		if cls.uuid == '':
+			cls.uuid = card
+		# errlog.debug('cls.uuid: '+ cls.uuid)
 		cls.stat_nums[cls.uuid] = {
 			"fans": [],
 			"freqs": [],
@@ -4187,12 +4201,16 @@ class GpuCollector(Collector):
 
 		if cls.gpu_brand == "AMD":
 			get_num = lambda s, f: re.match(f"{s}\d", f)
+			# errlog.debug('card: ' + card)
 			with os.scandir(cls._get_hwmon(card)) as files:
 				for file in files:
+					# errlog.debug('file: ' + file.name)
 					matches = [get_num(k, file.name) for k in sys_keys]
 					for i in range (0,5):
 						if matches[i]:
 							num = file.name[matches[i].end() - 1]
+							# errlog.debug('cls.stat_nums: ')
+							# errlog.debug(cls.stat_nums)
 							arr = cls.stat_nums[card][stat_keys[i]]
 							if len(arr) == 0 or num not in arr:
 								arr.append(num)
@@ -4274,6 +4292,8 @@ class GpuCollector(Collector):
 		else:
 			errlog.debug("GPU not supported")
 
+		# errlog.debug('stat: ')
+		# errlog.debug(stat)
 		return stat
 
 	@classmethod
@@ -4419,7 +4439,7 @@ class GpuCollector(Collector):
 		'''Init specific brand libraries and paths'''
 		if cls.gpu_brand == "AMD":
 			cls.dir: str = "/sys/class/drm/"
-			cls.hwmon: str = "/device/hwmon/hwmon0/"
+			cls.hwmon: str = "/device/hwmon/hwmon*/"
 			cls.pci_id_locations = ["/usr/share/hwdata/", "/usr/share/misc/"]
 
 		elif cls.gpu_brand == "NVIDIA":
