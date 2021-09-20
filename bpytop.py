@@ -2990,9 +2990,10 @@ class GpuBox(Box):
 
 		# voltage
 		if gpu.gpu_brand == "AMD":
-			out += f'{Mv.to(y+len(stat_nums["freqs"])-1, x)}'
+			out += f'{Mv.to(y+len(stat_nums["freqs"])-1, x+14)}'
 			for f_i in range(len(stat_nums["volts"])):
 				(n, name) = stat_nums["volts"][f_i]
+				errlog.debug(f'voltage: {voltage(stat["volts"][f"volt{n}"][0])}')
 				out += f'{Mv.d(1)}{THEME.graph_text(name+": ")}{voltage(stat["volts"][f"volt{n}"][0])}'
 
 		# power
@@ -3002,13 +3003,21 @@ class GpuBox(Box):
 			out += f'{Mv.d(1)}{THEME.graph_text("Draw: ")}{stat["power"][f"power{n}"]} W'
 
 		# temps
-		out += f'{Mv.to(y+2, Term.width - 5)}{stat["vitals"]["temp1"]}°C'
+		out += f'{Mv.to(y+5, Term.width - 5)}{stat["vitals"]["temp1"][0]}°C'
 
 		# fans
 		out += f'{Mv.l(4)}'#len of temps
-		for f_i in range(len(stat_nums["fans"])):
-			rpm = stat_nums["fans"][f_i]
-			out += f'{Mv.l(12 * (f_i + 1))}Fans: {rpm}% '
+		for f_i, _max_rpm in stat_nums["fans"]:
+			current_rpm, max_rpm = stat["fans"][f'fan{f_i}']
+			percent = round(int(current_rpm) / int(max_rpm) * 100)
+			fan_graph_name = f'FAN{f_i}'
+			out += f'{Mv.l(14 * (int(f_i) + 1))}{THEME.graph_text(fan_graph_name)}: {current_rpm}/{max_rpm} rpm ({percent}%)'
+			# TODO: Make this graph work with different structure for fans in stats
+			# stat: {'fans': {'fan1': (930, '3300')},
+			# fan_name = f'fan{f_i}'
+			# out += f'{Mv.to(y+2, Term.width - round(w / 2) - 2)}{THEME.graph_text(graph_name)}{Meters.gpu["fans"][fan_name](None if cls.resized else current_rpm)}'
+
+
 
 		Draw.buffer(cls.buffer, f'{out_misc}{out}{Term.fg}', only_save=Menu.active)
 		cls.redraw = cls.resized = False
@@ -4312,7 +4321,7 @@ class GpuCollector(Collector):
 			errlog.debug("GPU not supported")
 
 		for i in cls.stat_nums[cls.uuid]["power"]:
-			stat[f"power{i}"] = power
+			stat[f"power{i}"] = power(i)
 
 		return stat
 
